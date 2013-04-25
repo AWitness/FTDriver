@@ -12,13 +12,14 @@ package jp.ksksue.driver.serial;
  */
 
 import android.app.PendingIntent;
+import android.content.Context;
 import android.content.Intent;
+import android.hardware.usb.UsbConstants;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbEndpoint;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
-import android.hardware.usb.UsbConstants;
 import android.util.Log;
 
 enum FTDICHIPTYPE {
@@ -105,6 +106,8 @@ public class FTDriver {
     public static final int FTDI_SET_FLOW_XON_XOFF_HS = (0x4 << 8);
 
     private int[] mSerialProperty = new int[4];
+    
+    private PendingIntent pi;
 
     public static final int FTDI_MPSSE_BITMODE_RESET = 0x00;
     /** < switch off bitbang mode, back to regular serial/FIFO */
@@ -134,8 +137,8 @@ public class FTDriver {
     private final int mPacketSize = 64;
 
     private UsbManager mManager;
-    private UsbDevice mDevice;
-    private UsbDeviceConnection mDeviceConnection;
+    public UsbDevice mDevice;
+    public UsbDeviceConnection mDeviceConnection;
     private UsbInterface[] mInterface = new UsbInterface[FTDI_MAX_INTERFACE_NUM];
 
     private UsbEndpoint[] mFTDIEndpointIN;
@@ -169,21 +172,24 @@ public class FTDriver {
     }
 
     // Open an FTDI USB Device
-    public boolean begin(int baudrate) {
-        for (UsbDevice device : mManager.getDeviceList().values()) {
-            Log.i(TAG, "Devices : " + device.toString());
 
-            getPermission(device);
-            if (!mManager.hasPermission(device)) {
-                return false;
-            }
+    public static UsbDevice[] devices(Context c) {
+    	UsbManager m = (UsbManager)c.getSystemService(Context.USB_SERVICE);
+    	if (m.getDeviceList().size() == 0) return null;
+    	else return m.getDeviceList().values().toArray(new UsbDevice[1]);
+    }
+    
+    public boolean begin(UsbDevice device, int baudrate) {
+        Log.i(TAG, "device: " + device.toString());
 
-            // TODO: support any connections(current version find a first
-            // device)
-            if (getUsbInterfaces(device)) {
-                break;
-            }
+        getPermission(device);
+        if (!mManager.hasPermission(device)) {
+            return false;
         }
+
+        // TODO: support any connections(current version find a first
+        // device)
+        getUsbInterfaces(device);
 
         if (mSelectedDeviceInfo == null) {
             return false;
@@ -238,6 +244,7 @@ public class FTDriver {
                         mInterface[1] = null;
                     }
                     mDeviceConnection.close();
+                    Log.i("FTDriver", "device " + String.valueOf(mDevice.getDeviceId()) + " closed");
                 }
 
                 mDevice = null;
@@ -948,7 +955,8 @@ public class FTDriver {
      * @see setPermissionIntent
      */
     public void getPermission(UsbDevice device) {
-        if (device != null && mPermissionIntent != null) {
+//        if (device != null && mPermissionIntent != null) {
+    	if (device != null) {
             if (!mManager.hasPermission(device)) {
                 mManager.requestPermission(device, mPermissionIntent);
             }
